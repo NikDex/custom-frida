@@ -70,13 +70,18 @@ def get_source_patches(name: str, cap_name: str) -> list[tuple[str, str]]:
         ('"FridaAgent"', f'"{cap_name}Agent"'),
 
         # --- JS engine thread name (visible in /proc/pid/task/tid/status) ---
-        ('"gum-js-loop"', f'"{name}-js-loop"'),
+        ('"gum-js-loop"', f'"{name}-f"'),
+        ('"frida-main-loop"', f'"{name}-d"'),
+        ('"gum-modify-thread-worker"', f'"{name}-z"')
 
         # --- [E] Extended: internal Frida path references ---
         ("'frida'", f"'{name}'"),  # Generic single-quoted 'frida'
 
         # --- [E] Extended: asset directory name ---
         ("/ 'frida'", f"/ '{name}'"),  # root_asset_dir = libdir / 'frida'
+
+        # --- Do not resume on attach. Use python ---
+        ('private bool resume_on_attach = true;', 'private bool resume_on_attach = false;'),
     ]
 
 
