@@ -72,7 +72,7 @@ def get_source_patches(name: str, cap_name: str) -> list[tuple[str, str]]:
         # --- JS engine thread name (visible in /proc/pid/task/tid/status) ---
         ('"gum-js-loop"', f'"{name}-f"'),
         ('"frida-main-loop"', f'"{name}-d"'),
-        ('"gum-modify-thread-worker"', f'"{name}-z"')
+        ('"gum-modify-thread-worker"', f'"{name}-z"'),
 
         # --- [E] Extended: internal Frida path references ---
         ("'frida'", f"'{name}'"),  # Generic single-quoted 'frida'
