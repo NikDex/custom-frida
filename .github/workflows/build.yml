@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       frida_version:
-        description: 'Frida version (e.g. 17.7.2)'
+        description: 'Frida version (e.g. 17.15.3)'
         required: true
-        default: '17.7.2'
+        default: '17.15.3'
       custom_name:
         description: 'Custom name (replaces "frida" everywhere)'
         required: true
@@ -37,9 +37,26 @@ on:
         default: false
 
 jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.archs }}
+    steps:
+      - name: Parse Architectures
+        id: set-matrix
+        run: |
+          # Uses jq to cleanly convert "arch1,arch2" into ["arch1", "arch2"]
+          JSON_ARRAY=$(jq -R -c 'split(",")' <<< "${{ inputs.arch }}")
+          echo "archs=$JSON_ARRAY" >> $GITHUB_OUTPUT
+
   build:
+    needs: prepare
     runs-on: ubuntu-22.04
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(needs.prepare.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -47,6 +64,7 @@ jobs:
 
       - name: System info
         run: |
+          echo "Building for architecture: ${{ matrix.arch }}"
           echo "CPUs: $(nproc)"
           echo "RAM: $(free -h | grep Mem | awk '{print $2}')"
           echo "Disk: $(df -h / | tail -1 | awk '{print $4}') free"
@@ -56,9 +74,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential curl git python3 unzip
+          sudo apt-get install -y build-essential curl git python3 unzip jq
 
-      # Cache NDK (~1.5 GB) — saves ~3 min on subsequent runs
       - name: Cache NDK
         uses: actions/cache@v4
         id: ndk-cache
@@ -74,7 +91,6 @@ jobs:
             https://dl.google.com/android/repository/android-ndk-r29-linux.zip
           cd build && unzip -q android-ndk-r29-linux.zip && rm android-ndk-r29-linux.zip
 
-      # Cache Frida source tree — saves ~5 min clone time
       - name: Cache Frida source
         uses: actions/cache@v4
         id: frida-cache
@@ -88,11 +104,9 @@ jobs:
           git clone --recurse-submodules --branch ${{ inputs.frida_version }} --depth 1 \
             https://github.com/frida/frida.git build/frida
 
-      # If cache hit, we need a fresh copy (patches are destructive)
       - name: Prepare fresh source from cache
         if: steps.frida-cache.outputs.cache-hit == 'true'
         run: |
-          # Restore to clean state (including build dir — patches are destructive)
           cd build/frida
           git checkout -- .
           git submodule foreach --recursive 'git checkout -- . || true'
@@ -102,9 +116,10 @@ jobs:
       - name: Build command
         id: cmd
         run: |
+          # 3. PASS THE MATRIX ARCHITECTURE to build.py instead of inputs.arch
           CMD="python3 build.py --version ${{ inputs.frida_version }}"
           CMD="$CMD --name ${{ inputs.custom_name }}"
-          CMD="$CMD --arch ${{ inputs.arch }}"
+          CMD="$CMD --arch ${{ matrix.arch }}"
           CMD="$CMD --skip-clone --ndk-path build/android-ndk-r29"
           CMD="$CMD --verify"
 
@@ -142,7 +157,7 @@ jobs:
       - name: Upload server artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.custom_name }}-server-${{ inputs.frida_version }}
+          name: ${{ inputs.custom_name }}-server-${{ inputs.frida_version }}-${{ matrix.arch }}
           path: output/${{ inputs.custom_name }}-server-*.gz
           retention-days: 30
           if-no-files-found: warn
@@ -150,7 +165,7 @@ jobs:
       - name: Upload gadget artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.custom_name }}-gadget-${{ inputs.frida_version }}
+          name: ${{ inputs.custom_name }}-gadget-${{ inputs.frida_version }}-${{ matrix.arch }}
           path: output/${{ inputs.custom_name }}-gadget-*.gz
           retention-days: 30
           if-no-files-found: ignore
@@ -158,7 +173,7 @@ jobs:
       - name: Upload uncompressed binaries
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.custom_name }}-${{ inputs.frida_version }}-uncompressed
+          name: ${{ inputs.custom_name }}-${{ inputs.frida_version }}-uncompressed-${{ matrix.arch }}
           path: |
             output/*
             !output/*.gz
