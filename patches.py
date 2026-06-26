@@ -139,6 +139,9 @@ def get_targeted_patches(name: str, cap_name: str, target: str) -> list[tuple[st
             # Cross-arch naming
             (f'"frida-server-"', f'"{name}-server-"'),
             (f'"frida-gadget-"', f'"{name}-gadget-"'),
+            # Fix frida 17.15.3: global 'frida'->name patch renames caller in meson.build
+            # but choices=["upstream","frida"] uses double-quotes -> not renamed -> argparse exit 2
+            ('choices=["upstream", "frida"]', f'choices=["upstream", "{name}"]'),
         ]
 
     elif target == "core_meson":
@@ -460,3 +463,4 @@ Detection vectors addressed:
 15. Build config defines:    FRIDA_HELPER_PATH, FRIDA_AGENT_PATH -- renamed
 16. Asset directory:         libdir/frida -- libdir/custom
 """
+
